@@ -2,7 +2,7 @@
 #include <iostream>
 #include <QCoreApplication>
 #include <QImage>
-#include "bitwise_op.h"  // Incluimos el archivo de operaciones bitwise
+#include "bitwise_op.h"
 
 using namespace std;
 
@@ -14,38 +14,47 @@ int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
 
-    QString archivoEntrada = "I_O.bmp";
-    QString archivoSalida = "I_D.bmp";
+    QString archivoEntrada = "I_D.bmp";  // Ahora trabajamos desde la imagen distorsionada
+    QString archivoSalida = "I_D_R1.bmp";
+    QString archivoDistorsion = "I_M.bmp";
 
     int width = 0, height = 0;
 
-    // Cargar imagen original
+    // Cargar la imagen distorsionada
     unsigned char* pixelData = loadPixels(archivoEntrada, width, height);
     if (!pixelData) {
         cerr << "Error al cargar la imagen '" << archivoEntrada.toStdString() << "'" << endl;
         return -1;
     }
 
-    cout << "Imagen cargada exitosamente:" << endl;
-    cout << "  Ancho: " << width  << " px" << endl;
-    cout << "  Alto:  " << height << " px" << endl;
+    // Cargar la imagen de distorsión
+    unsigned char* distorsionData = loadPixels(archivoDistorsion, width, height);
+    if (!distorsionData) {
+        cerr << "Error al cargar la imagen '" << archivoDistorsion.toStdString() << "'" << endl;
+        delete[] pixelData;
+        return -1;
+    }
 
-    // NO se aplican aún operaciones XOR, solo se guarda tal como se cargó
-    bool exportado = exportImage(pixelData, width, height, archivoSalida);
-    cout << "Exportacion: " << (exportado ? "Exitosa" : "Fallida") << endl;
-
-    // Leer archivo de enmascaramiento
+    // Desenmascarar usando el archivo M1.txt
     int seed = 0;
     int n_pixels = 0;
     unsigned int* maskingData = loadSeedMasking("M1.txt", seed, n_pixels);
 
     if (maskingData != nullptr) {
         cout << "Primeros valores RGB leídos del archivo M1.txt:" << endl;
-        for (int i = 0; i < min(n_pixels * 3, 30); i += 3) { // Mostramos hasta 10 píxeles
+        for (int i = 0; i < min(n_pixels * 3, 30); i += 3) {
             cout << "  Pixel " << i / 3 << ": ("
                  << maskingData[i] << ", "
                  << maskingData[i + 1] << ", "
                  << maskingData[i + 2] << ")" << endl;
+        }
+
+        for (int i = 0; i < n_pixels; ++i) {
+            int index = (seed + i) % (width * height);  // Índice del píxel
+            int pos = index * 3;
+            pixelData[pos]     = applyXOR(&pixelData[pos], maskingData[i * 3]);     // R
+            pixelData[pos + 1] = applyXOR(&pixelData[pos + 1], maskingData[i * 3 + 1]); // G
+            pixelData[pos + 2] = applyXOR(&pixelData[pos + 2], maskingData[i * 3 + 2]); // B
         }
 
         delete[] maskingData;
@@ -53,7 +62,14 @@ int main(int argc, char *argv[])
         cerr << "No se pudo cargar el archivo de enmascaramiento." << endl;
     }
 
+    // Exportar imagen desenmascarada parcialmente
+    bool exportado = exportImage(pixelData, width, height, archivoSalida);
+    cout << "Exportacion: " << (exportado ? "Exitosa" : "Fallida") << endl;
+
+    // Liberar memoria
     delete[] pixelData;
+    delete[] distorsionData;
+
     return 0;
 }
 
@@ -111,6 +127,7 @@ unsigned int* loadSeedMasking(const char* nombreArchivo, int &seed, int &n_pixel
         return nullptr;
     }
 
+
     unsigned int* RGB = new unsigned int[n_pixels * 3];
     archivo >> seed;
     for (int i = 0; i < n_pixels * 3; i += 3) {
@@ -122,6 +139,6 @@ unsigned int* loadSeedMasking(const char* nombreArchivo, int &seed, int &n_pixel
 
     archivo.close();
     cout << "Semilla: " << seed << endl;
-    cout << "Cantidad de pixeles leídos: " << n_pixels << endl;
+    cout << "Cantidad de pixeles leidos: " << n_pixels << endl;
     return RGB;
 }
