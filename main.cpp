@@ -2,6 +2,7 @@
 #include <iostream>
 #include <QCoreApplication>
 #include <QImage>
+#include "bitwise_op.h"  // Incluimos el archivo de operaciones bitwise
 
 using namespace std;
 
@@ -13,16 +14,15 @@ int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
 
-
     QString archivoEntrada = "I_O.bmp";
     QString archivoSalida = "I_D.bmp";
 
     int width = 0, height = 0;
 
+    // Cargar imagen original
     unsigned char* pixelData = loadPixels(archivoEntrada, width, height);
     if (!pixelData) {
-        cerr << "Error al cargar la imagen '"
-             << archivoEntrada.toStdString() << "'" << endl;
+        cerr << "Error al cargar la imagen '" << archivoEntrada.toStdString() << "'" << endl;
         return -1;
     }
 
@@ -30,19 +30,30 @@ int main(int argc, char *argv[])
     cout << "  Ancho: " << width  << " px" << endl;
     cout << "  Alto:  " << height << " px" << endl;
 
-    for (int i = 0; i < width * height * 3; i += 3){
-        pixelData[i] = i % 256; //R
-        pixelData[i + 1] = i % 256; //G
-        pixelData[i + 2] = i % 256; //B
-    }
-    //Exportar imagen modificada
+    // NO se aplican aún operaciones XOR, solo se guarda tal como se cargó
     bool exportado = exportImage(pixelData, width, height, archivoSalida);
     cout << "Exportacion: " << (exportado ? "Exitosa" : "Fallida") << endl;
 
-    //Liberar memoria
+    // Leer archivo de enmascaramiento
+    int seed = 0;
+    int n_pixels = 0;
+    unsigned int* maskingData = loadSeedMasking("M1.txt", seed, n_pixels);
+
+    if (maskingData != nullptr) {
+        cout << "Primeros valores RGB leídos del archivo M1.txt:" << endl;
+        for (int i = 0; i < min(n_pixels * 3, 30); i += 3) { // Mostramos hasta 10 píxeles
+            cout << "  Pixel " << i / 3 << ": ("
+                 << maskingData[i] << ", "
+                 << maskingData[i + 1] << ", "
+                 << maskingData[i + 2] << ")" << endl;
+        }
+
+        delete[] maskingData;
+    } else {
+        cerr << "No se pudo cargar el archivo de enmascaramiento." << endl;
+    }
+
     delete[] pixelData;
-
-
     return 0;
 }
 
@@ -75,8 +86,7 @@ bool exportImage(unsigned char* pixelData, int width, int height, QString archiv
         cout << "Error: No se pudo guardar la imagen BMP modificada.";
         return false;
     } else {
-        cout << "Imagen BMP modificada guardada como "
-             << archivoSalida.toStdString() << endl;
+        cout << "Imagen BMP modificada guardada como " << archivoSalida.toStdString() << endl;
         return true;
     }
 }
@@ -87,17 +97,20 @@ unsigned int* loadSeedMasking(const char* nombreArchivo, int &seed, int &n_pixel
         cout << "No se pudo abrir el archivo." << endl;
         return nullptr;
     }
+
     archivo >> seed;
     int r, g, b;
     while (archivo >> r >> g >> b) {
         n_pixels++;
     }
     archivo.close();
+
     archivo.open(nombreArchivo);
     if (!archivo.is_open()) {
         cout << "Error al reabrir el archivo." << endl;
         return nullptr;
     }
+
     unsigned int* RGB = new unsigned int[n_pixels * 3];
     archivo >> seed;
     for (int i = 0; i < n_pixels * 3; i += 3) {
@@ -106,8 +119,9 @@ unsigned int* loadSeedMasking(const char* nombreArchivo, int &seed, int &n_pixel
         RGB[i + 1] = g;
         RGB[i + 2] = b;
     }
+
     archivo.close();
     cout << "Semilla: " << seed << endl;
-    cout << "Cantidad de píxeles leídos: " << n_pixels << endl;
+    cout << "Cantidad de pixeles leídos: " << n_pixels << endl;
     return RGB;
 }
