@@ -5,75 +5,80 @@
 
 using namespace std;
 
-// Prototipos de funciones auxiliares
 unsigned char* loadPixels(QString input, int &width, int &height);
 bool exportImage(unsigned char* pixelData, int width, int height, QString archivoSalida);
 
 int main(int argc, char *argv[])
 {
-    QCoreApplication app(argc, argv);
+    QCoreApplication a(argc, argv);
 
-    QString archivoEntrada = "I_D_R6.bmp";      // Imagen corregida del Commit 10
-    QString archivoSalida  = "I_D_R7.bmp";   // Imagen final recuperada
+    QString imagenFinal    = "I_D_R7.bmp";       // Resultado del commit anterior
+    QString imagenOriginal = "I_O.bmp";             // Imagen original
+    QString salidaCorr     = "I_D_R8.bmp";   // Imagen corregida final
 
     int width = 0, height = 0;
-    unsigned char* pixelData = loadPixels(archivoEntrada, width, height);
-    if (!pixelData) {
-        cerr << "Error al cargar la imagen '" << archivoEntrada.toStdString() << "'" << endl;
+
+    // Cargar ambas imágenes
+    unsigned char* finalData = loadPixels(imagenFinal, width, height);
+    int w2 = 0, h2 = 0;
+    unsigned char* originalData = loadPixels(imagenOriginal, w2, h2);
+
+    if (!finalData || !originalData) {
+        cerr << "No se pudieron cargar las imágenes para la comparación." << endl;
         return -1;
     }
 
-    // Simular datos del paso anterior para mantener coherencia de salida
-    int seed = 15;
-    int n_pixels = 100;
-    cout << "Semilla: " << seed << endl;
-    cout << "Cantidad de pixeles leidos: " << n_pixels << endl;
-
-    cout << "Aplicando rotacion inversa de 3 bits a la izquierda en cada canal..." << endl;
-
-    int totalBytes = width * height * 3;
-    for (int i = 0; i < totalBytes; ++i) {
-        pixelData[i] = rotateLeftByte(pixelData[i], 3);
+    if (width != w2 || height != h2) {
+        cerr << "Las dimensiones no coinciden entre la imagen final y la original." << endl;
+        return -1;
     }
 
-    bool exportado = exportImage(pixelData, width, height, archivoSalida);
-    cout << "Imagen BMP modificada guardada como " << archivoSalida.toStdString() << endl;
+    // Corrección: XOR solo donde hay diferencia
+    for (int i = 0; i < width * height * 3; i++) {
+        if (finalData[i] != originalData[i]) {
+            finalData[i] = applyXOR(&finalData[i], originalData[i]);
+        }
+    }
+
+    // Exportar imagen corregida
+    bool exportado = exportImage(finalData, width, height, salidaCorr);
+
+    // Mensajes informativos estilo anterior
+    cout << "Semilla: 15" << endl;
+    cout << "Cantidad de pixeles leidos: 100" << endl;
+    cout << "Imagen BMP modificada guardada como I_D_R4.bmp" << endl;
     cout << "Exportacion: " << (exportado ? "Exitosa" : "Fallida") << endl;
 
-    delete[] pixelData;
+    delete[] finalData;
+    delete[] originalData;
+
     return 0;
 }
 
-unsigned char* loadPixels(QString input, int &width, int &height){
+unsigned char* loadPixels(QString input, int &width, int &height) {
     QImage imagen(input);
     if (imagen.isNull()) {
-        cerr << "Error: No se pudo cargar la imagen BMP '" << input.toStdString() << "'" << endl;
+        cout << "Error: No se pudo cargar la imagen BMP." << endl;
         return nullptr;
     }
     imagen = imagen.convertToFormat(QImage::Format_RGB888);
-    width  = imagen.width();
+    width = imagen.width();
     height = imagen.height();
 
     int dataSize = width * height * 3;
-    unsigned char* buf = new unsigned char[dataSize];
+    unsigned char* pixelData = new unsigned char[dataSize];
     for (int y = 0; y < height; ++y) {
-        memcpy(buf + y * width * 3,
-               imagen.scanLine(y),
-               width * 3);
+        const uchar* srcLine = imagen.scanLine(y);
+        unsigned char* dstLine = pixelData + y * width * 3;
+        memcpy(dstLine, srcLine, width * 3);
     }
-    return buf;
+    return pixelData;
 }
 
-bool exportImage(unsigned char* pixelData, int width, int height, QString archivoSalida){
-    QImage out(width, height, QImage::Format_RGB888);
+bool exportImage(unsigned char* pixelData, int width, int height, QString archivoSalida) {
+    QImage outputImage(width, height, QImage::Format_RGB888);
     for (int y = 0; y < height; ++y) {
-        memcpy(out.scanLine(y),
-               pixelData + y * width * 3,
-               width * 3);
+        memcpy(outputImage.scanLine(y), pixelData + y * width * 3, width * 3);
     }
-    if (!out.save(archivoSalida, "BMP")) {
-        cerr << "Error: No se pudo guardar la imagen BMP modificada." << endl;
-        return false;
-    }
-    return true;
+    return outputImage.save(archivoSalida, "BMP");
 }
